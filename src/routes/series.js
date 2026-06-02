@@ -25,6 +25,25 @@ router.get('/search', async (req, res) => {
   }
 });
 
+// GET /api/series/episodes?id=334&season=1
+router.get('/episodes', async (req, res) => {
+  const { id, season } = req.query;
+  if (!id || !season) return res.status(400).json({ error: 'id et season requis' });
+  try {
+    const { data } = await require('axios').get(
+      `https://nakastream.tv/api/v1/browse/${id}/season/${season}`,
+      { headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' } }
+    );
+    const episodes = (data.episodes || []).map(ep => ({
+      number: ep.episode_number,
+      name: ep.name,
+    }));
+    res.json({ episodes, count: episodes.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/series/seasons?id=334
 router.get('/seasons', async (req, res) => {
   const { id } = req.query;
