@@ -76,7 +76,18 @@ async function getAvailableSeasons(nakaId) {
 async function getVideoStream(nakaId, tmdbId, type = 'movie', season = 1, episode = 1) {
   const launchOptions = {
     headless: 'new',
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--disable-extensions',
+      '--disable-default-apps',
+      '--no-first-run',
+      '--no-zygote',
+      '--single-process',
+      '--memory-pressure-off',
+    ],
   };
   if (CHROME_PATH) launchOptions.executablePath = CHROME_PATH;
   const browser = await puppeteer.launch(launchOptions);
