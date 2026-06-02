@@ -19,8 +19,22 @@ const http = axios.create({
   },
 });
 
+// Mapping TMDB genre IDs → noms
+const TMDB_GENRES = {
+  28:'Action',12:'Aventure',16:'Animation',35:'Comédie',80:'Crime',
+  99:'Documentaire',18:'Drame',10751:'Famille',14:'Fantastique',
+  36:'Histoire',27:'Horreur',10402:'Musique',9648:'Mystère',
+  10749:'Romance',878:'Science-Fiction',10770:'Téléfilm',53:'Thriller',
+  10752:'Guerre',37:'Western',
+};
+
 function formatItem(item) {
   const isMovie = item.mediaType === 'movie';
+  // Genres : tableau d'objets {id,name} ou tableau d'IDs
+  const rawGenres = item.genres || item.genreIds || [];
+  const genres = rawGenres.map(g =>
+    typeof g === 'object' ? g.name : (TMDB_GENRES[g] || null)
+  ).filter(Boolean);
   return {
     id: item.id,
     tmdbId: item.tmdbId,
@@ -37,6 +51,7 @@ function formatItem(item) {
     seasons: item.numberOfSeasons || null,
     episodes: item.numberOfEpisodes || null,
     quality: item.quality || null,
+    genres,
     url: `${BASE_URL}/content/${isMovie ? 'movie' : 'tv'}/${item.tmdbId}`,
   };
 }
