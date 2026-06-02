@@ -6,7 +6,9 @@ puppeteer.use(StealthPlugin());
 
 const BASE_URL = 'https://nakastream.tv';
 const TMDB_IMG = 'https://image.tmdb.org/t/p/w500';
-const CHROME_PATH = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const CHROME_PATH = process.platform === 'darwin'
+  ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+  : null;
 
 const http = axios.create({
   baseURL: BASE_URL,
@@ -72,11 +74,12 @@ async function getAvailableSeasons(nakaId) {
 
 // Récupère le stream via Puppeteer
 async function getVideoStream(nakaId, tmdbId, type = 'movie', season = 1, episode = 1) {
-  const browser = await puppeteer.launch({
-    executablePath: CHROME_PATH,
+  const launchOptions = {
     headless: 'new',
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-  });
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+  };
+  if (CHROME_PATH) launchOptions.executablePath = CHROME_PATH;
+  const browser = await puppeteer.launch(launchOptions);
 
   try {
     const page = await browser.newPage();
