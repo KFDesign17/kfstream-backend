@@ -5,7 +5,8 @@ const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 puppeteer.use(StealthPlugin());
 
 const BASE_URL = 'https://fexini.net';
-const TMDB_IMG = 'https://image.tmdb.org/t/p/w500';
+const TMDB_POSTER = 'https://image.tmdb.org/t/p/w780';
+const TMDB_BACKDROP = 'https://image.tmdb.org/t/p/w1280';
 const CHROME_PATH = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 
 const http = axios.create({
@@ -23,8 +24,8 @@ function formatItem(item) {
     slug: item.slug,
     title: item.title,
     originalTitle: item.originalTitle || item.title,
-    thumbnail: item.posterPath ? `${TMDB_IMG}${item.posterPath}` : '',
-    backdrop: item.backdropPath ? `${TMDB_IMG}${item.backdropPath}` : '',
+    thumbnail: item.posterPath ? `${TMDB_POSTER}${item.posterPath}` : '',
+    backdrop: item.backdropPath ? `${TMDB_BACKDROP}${item.backdropPath}` : '',
     synopsis: item.overview || '',
     year: item.releaseYear || null,
     rating: item.voteAverage || null,
