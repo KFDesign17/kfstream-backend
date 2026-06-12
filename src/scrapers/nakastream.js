@@ -2,8 +2,7 @@ const axios = require('axios');
 const puppeteer = require('puppeteer');
 
 const BASE_URL = 'https://nakastream.tv';
-const TMDB_POSTER = 'https://image.tmdb.org/t/p/w780';
-const TMDB_BACKDROP = 'https://image.tmdb.org/t/p/w1280';
+const TMDB_IMG = 'https://image.tmdb.org/t/p/w500';
 const CHROME_PATH = process.env.PUPPETEER_EXECUTABLE_PATH ||
   (process.platform === 'darwin'
     ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
@@ -40,8 +39,8 @@ function formatItem(item) {
     slug: item.tmdbId,
     title: item.title,
     originalTitle: item.originalTitle || item.title,
-    thumbnail: item.posterPath ? `${TMDB_POSTER}${item.posterPath}` : '',
-    backdrop: item.backdropPath ? `${TMDB_BACKDROP}${item.backdropPath}` : '',
+    thumbnail: item.posterPath ? `${TMDB_IMG}${item.posterPath}` : '',
+    backdrop: item.backdropPath ? `${TMDB_IMG}${item.backdropPath}` : '',
     synopsis: item.overview || '',
     year: item.releaseDate ? new Date(item.releaseDate).getFullYear() : null,
     rating: item.voteAverage ? parseFloat(item.voteAverage) : null,
