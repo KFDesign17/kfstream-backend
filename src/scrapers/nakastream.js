@@ -131,12 +131,13 @@ async function getVideoStream(nakaId, tmdbId, type = 'movie', season = 1, episod
         return res.ok ? res.json() : null;
       }, nakaId, season, episode);
     } else {
-      // Pour les films : clic sur "Lecture"
-      await page.evaluate(() => {
-        const btn = Array.from(document.querySelectorAll('button')).find(b => b.textContent.trim() === 'Lecture');
-        if (btn) btn.click();
-      });
-      sourceData = await sourcesReady;
+      // Pour les films : appel direct de l'API sources (plus fiable que le clic sur "Lecture")
+      sourceData = await page.evaluate(async (nakaId) => {
+        const res = await fetch(`/api/v1/streaming/sources/${nakaId}?type=movie`, {
+          credentials: 'include',
+        });
+        return res.ok ? res.json() : null;
+      }, nakaId);
     }
 
     if (!sourceData?.sources?.length) return null;
