@@ -11,20 +11,35 @@ const http = axios.create({
   },
 });
 
-async function searchAnime(query) {
-  const { data } = await http.get(`/catalogue/?search=${encodeURIComponent(query)}`);
+async function _fetchSuggest(q) {
+  const { data } = await http.post('/template-php/defaut/fetch.php', `query=${encodeURIComponent(q)}`, {
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  });
   const $ = cheerio.load(data);
   const results = [];
-
-  $('.catalog-card').each((_, el) => {
-    const card = $(el);
-    const title = card.find('.card-title').text().trim();
-    const href = card.find('a').attr('href') || '';
+  $('a.asn-search-result').each((_, el) => {
+    const a = $(el);
+    const href = a.attr('href') || '';
     const slug = href.replace(`${BASE_URL}/catalogue/`, '').replace('/catalogue/', '').replace(/\/$/, '');
-    const thumbnail = card.find('.card-image').attr('src') || '';
-    const subtitle = card.find('.alternate-titles').text().trim().split(',')[0].trim();
+    const title = a.find('.asn-search-result-title').text().trim();
+    const thumbnail = a.find('.asn-search-result-img').attr('src') || '';
+    const subtitle = a.find('.asn-search-result-subtitle').text().trim().split(',')[0].trim();
     if (title && slug) results.push({ title, slug, thumbnail, subtitle });
   });
+  return results;
+}
+
+async function searchAnime(query) {
+  const results = await _fetchSuggest(query);
+  if (results.length > 0) return results;
+
+  // Si longue phrase sans résultats, réessayer avec les 2 premiers mots
+  const words = query.trim().split(/\s+/);
+  if (words.length >= 3) {
+    const short = words.slice(0, 2).join(' ');
+    const retry = await _fetchSuggest(short);
+    if (retry.length > 0) return retry;
+  }
 
   return results;
 }
@@ -38,13 +53,22 @@ async function checkVfExists(animeSlug, baseSlug) {
   }
 }
 
+async function checkSeasonHasEpisodes(animeSlug, seasonSlug) {
+  try {
+    const { data } = await http.get(`/catalogue/${animeSlug}/${seasonSlug}/episodes.js`);
+    return typeof data === 'string' && data.trim().length > 0 && /https?:\/\//.test(data);
+  } catch {
+    return false;
+  }
+}
+
 async function getAnimeDetails(slug) {
   const { data } = await http.get(`/catalogue/${slug}/`);
   const $ = cheerio.load(data);
 
   const title = $('#titreOeuvre').text().trim();
   const subtitle = $('#titreAlter').text().trim() || $('.titrealter, .alternate-title').first().text().trim() || '';
-  const synopsis = $('meta[name="description"]').attr('content') || '';
+  const synopsis = $('#synopsisText').text().trim() || $('meta[name="description"]').attr('content') || '';
   const thumbnail = $('#coverOeuvre').attr('src') || $('meta[property="og:image"]').attr('content') || '';
 
   // Infos : genres, type, langues
@@ -86,19 +110,23 @@ async function getAnimeDetails(slug) {
   });
 
   // Saisons extraites des appels panneauAnime("nom", "url") dans le HTML
+  // On retire d'abord les commentaires JS /* ... */ pour éviter d'extraire les saisons commentées
+  const dataNoComments = data.replace(/\/\*[\s\S]*?\*\//g, '');
   const vostfrSeasons = [];
   const seasonRegex = /panneauAnime\s*\(\s*["']([^"']+)["']\s*,\s*["']([^"']+)["']\s*\)/g;
   let match;
-  while ((match = seasonRegex.exec(data)) !== null) {
+  while ((match = seasonRegex.exec(dataNoComments)) !== null) {
     if (match[1] !== 'nom' && match[2] !== 'url') {
       vostfrSeasons.push({ name: match[1], slug: match[2] });
     }
   }
 
-  // Pour chaque saison VOSTFR, vérifie si une version VF existe
+  // Pour chaque saison VOSTFR, vérifie qu'elle a des épisodes et si une VF existe
   const seasons = [];
   await Promise.all(vostfrSeasons.map(async (s) => {
     const baseSlug = s.slug.replace('/vostfr', '');
+    const hasEpisodes = await checkSeasonHasEpisodes(slug, s.slug);
+    if (!hasEpisodes) return;
     const hasVf = await checkVfExists(slug, baseSlug);
     seasons.push(s);
     if (hasVf) {
@@ -261,7 +289,7 @@ async function getCatalogue({ page = 1, types = [], langs = [], genres = [] } = 
   const params = new URLSearchParams();
   params.append('page', page);
   types.forEach(t => params.append('type[]', t));
-  langs.forEach(l => params.append('lang[]', l));
+  langs.forEach(l => params.append('langue[]', l));
   genres.forEach(g => params.append('genre[]', g));
 
   const { data } = await http.get(`/catalogue/?${params.toString()}`);
@@ -281,11 +309,20 @@ async function getCatalogue({ page = 1, types = [], langs = [], genres = [] } = 
       const value = $(row).find('.info-value').text().trim();
       if (label && value) infoRows[label] = value;
     });
+    // Langues depuis les drapeaux SVG (.lang-flag[title]) — FR=VF, JP=VOSTFR
+    const flagTitles = card.find('.lang-flag').map((_, el) => $(el).attr('title')).get();
+    const cardLangs = [];
+    if (flagTitles.includes('JP')) cardLangs.push('VOSTFR');
+    if (flagTitles.includes('FR')) cardLangs.push('VF');
+    if (flagTitles.length > 0 && !flagTitles.includes('JP') && !flagTitles.includes('FR')) {
+      cardLangs.push(flagTitles.join(', '));
+    }
+    const langsStr = cardLangs.join(', ') || infoRows['langues'] || '';
     if (title && slug) items.push({
       title, slug, thumbnail, subtitle,
       genres: infoRows['genres'] || '',
       type: infoRows['types'] || '',
-      langs: infoRows['langues'] || '',
+      langs: langsStr,
     });
   });
 
