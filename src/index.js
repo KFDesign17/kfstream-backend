@@ -5,6 +5,8 @@ const axios = require('axios');
 const animeRoutes = require('./routes/anime');
 const filmsRoutes = require('./routes/films');
 const seriesRoutes = require('./routes/series');
+const notifyRoutes = require('./routes/notify');
+const trailerRoutes = require('./routes/trailer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -15,6 +17,8 @@ app.use(express.json());
 app.use('/api/anime', animeRoutes);
 app.use('/api/films', filmsRoutes);
 app.use('/api/series', seriesRoutes);
+app.use('/api/notify', notifyRoutes);
+app.use('/api/trailer', trailerRoutes);
 
 // Proxy générique — transmet les requêtes avec le bon Referer
 app.get('/api/proxy', async (req, res) => {
@@ -43,6 +47,6 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-app.listen(PORT, () => {
-  console.log(`KFStream backend running on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`KFStream backend running on port ${PORT}`);
 });
