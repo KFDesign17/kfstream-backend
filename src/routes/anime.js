@@ -52,10 +52,10 @@ router.get('/resolve-url', async (req, res) => {
 });
 
 // GET /api/anime/catalogue?page=1&type[]=Anime&lang[]=VOSTFR&genre[]=Action
-// GET /api/anime/stream?url=https://video.sibnet.ru/shell.php?videoid=xxx
-// Proxy streaming : résout l'URL fraîche et streame le contenu en direct
+// GET /api/anime/stream?url=...
+// GET /api/anime/stream?url=...&download=1  → proxy (pour téléchargement, envoie Content-Length)
 router.get('/stream', async (req, res) => {
-  const { url } = req.query;
+  const { url, download } = req.query;
   if (!url) return res.status(400).end();
 
   const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
@@ -86,24 +86,30 @@ router.get('/stream', async (req, res) => {
 
     if (!cdnUrl) return res.status(404).end();
 
-    // Support Range requests (seek dans la vidéo)
-    const rangeHeader = req.headers.range;
+    res.setHeader('Access-Control-Allow-Origin', '*');
+
+    if (!download) {
+      // Streaming WebView : redirection directe (le WebView envoie le bon Referer)
+      return res.redirect(302, cdnUrl);
+    }
+
+    // Mode téléchargement : proxy avec headers pour que expo-file-system ait le Content-Length
+    const rangeHeader = req.headers['range'];
     const videoResp = await axios.get(cdnUrl, {
       headers: {
+        'Referer': url,
         'User-Agent': ua,
-        'Referer': url.includes('sibnet') ? 'https://video.sibnet.ru/' : url,
         ...(rangeHeader ? { 'Range': rangeHeader } : {}),
       },
       responseType: 'stream',
-      timeout: 60000,
+      timeout: 0,
     });
 
+    res.status(rangeHeader ? 206 : 200);
     res.setHeader('Content-Type', videoResp.headers['content-type'] || 'video/mp4');
-    res.setHeader('Accept-Ranges', 'bytes');
-    res.setHeader('Access-Control-Allow-Origin', '*');
     if (videoResp.headers['content-length']) res.setHeader('Content-Length', videoResp.headers['content-length']);
     if (videoResp.headers['content-range']) res.setHeader('Content-Range', videoResp.headers['content-range']);
-    res.status(videoResp.status);
+    if (videoResp.headers['accept-ranges']) res.setHeader('Accept-Ranges', videoResp.headers['accept-ranges']);
     videoResp.data.pipe(res);
   } catch (err) {
     res.status(500).end();
