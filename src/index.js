@@ -2,6 +2,10 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
+const path = require('path');
+const https = require('https');
+const http = require('http');
+const { URL: NodeURL } = require('url');
 const animeRoutes = require('./routes/anime');
 const filmsRoutes = require('./routes/films');
 const seriesRoutes = require('./routes/series');
@@ -19,6 +23,49 @@ app.use('/api/films', filmsRoutes);
 app.use('/api/series', seriesRoutes);
 app.use('/api/notify', notifyRoutes);
 app.use('/api/trailer', trailerRoutes);
+
+// Proxy vidéo streaming — transmet avec Referer cineregal.art, suit les redirects, supporte Range
+function streamVideoProxy(url, headers, res, redirectsLeft) {
+  if (redirectsLeft <= 0) return res.status(502).end();
+  let parsed;
+  try { parsed = new NodeURL(url); } catch { return res.status(400).end(); }
+  const protocol = parsed.protocol === 'https:' ? https : http;
+  const proxyReq = protocol.request({
+    hostname: parsed.hostname,
+    port: parsed.port || undefined,
+    path: parsed.pathname + parsed.search,
+    method: 'GET',
+    headers,
+  }, (proxyRes) => {
+    if ([301, 302, 303, 307, 308].includes(proxyRes.statusCode) && proxyRes.headers.location) {
+      proxyRes.resume();
+      const loc = proxyRes.headers.location;
+      const next = loc.startsWith('http') ? loc : new NodeURL(loc, url).toString();
+      return streamVideoProxy(next, headers, res, redirectsLeft - 1);
+    }
+    ['content-type', 'content-length', 'content-range', 'accept-ranges', 'cache-control'].forEach(h => {
+      if (proxyRes.headers[h]) res.setHeader(h, proxyRes.headers[h]);
+    });
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.status(proxyRes.statusCode || 200);
+    proxyRes.pipe(res);
+  });
+  proxyReq.on('error', () => { try { res.status(502).end(); } catch {} });
+  proxyReq.end();
+}
+
+app.get('/api/proxy/video', (req, res) => {
+  const { url } = req.query;
+  if (!url) return res.status(400).json({ error: 'url requis' });
+  const reqHeaders = {
+    'Referer': 'https://cineregal.art/',
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Accept': '*/*',
+  };
+  if (req.headers.range) reqHeaders['Range'] = req.headers.range;
+  req.on('close', () => res.destroy());
+  streamVideoProxy(url, reqHeaders, res, 5);
+});
 
 // Proxy générique — transmet les requêtes avec le bon Referer
 app.get('/api/proxy', async (req, res) => {
@@ -41,6 +88,20 @@ app.get('/api/proxy', async (req, res) => {
   } catch (err) {
     res.status(502).json({ error: err.message });
   }
+});
+
+app.get('/download/kfstream.apk', (req, res) => {
+  const apkPath = path.join(__dirname, 'kfstream.apk');
+  res.setHeader('Content-Disposition', 'attachment; filename="kfstream.apk"');
+  res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+  res.sendFile(apkPath);
+});
+
+app.get('/download/kfstream-tv.apk', (req, res) => {
+  const apkPath = path.join(__dirname, 'kfstream-tv.apk');
+  res.setHeader('Content-Disposition', 'attachment; filename="kfstream-tv.apk"');
+  res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+  res.sendFile(apkPath);
 });
 
 app.get('/health', (req, res) => {
