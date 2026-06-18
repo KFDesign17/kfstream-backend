@@ -53,6 +53,17 @@ async function fetchPage(url) {
   return data;
 }
 
+// Variante qui capture aussi les cookies de session pour les transmettre au CDN
+async function fetchPageWithCookies(url) {
+  const response = await axios.get(url, {
+    headers: { 'User-Agent': UA, 'Accept-Language': 'fr-FR,fr;q=0.9' },
+    timeout: 12000,
+  });
+  const rawCookies = response.headers['set-cookie'] || [];
+  const cookieStr = rawCookies.map(c => c.split(';')[0]).join('; ');
+  return { html: response.data, cookies: cookieStr };
+}
+
 async function getCineregalFilmUrl(tmdbId) {
   try {
     const titles = await getTitles(tmdbId, 'movie');
@@ -71,6 +82,36 @@ async function getCineregalFilmUrl(tmdbId) {
     }
   } catch {
     // ignore
+  }
+  return null;
+}
+
+// Variante pour le téléchargement : retourne l'URL + les cookies de session
+async function getCineregalFilmUrlWithCookies(tmdbId) {
+  const titles = await getTitles(tmdbId, 'movie');
+  const slugs = [...new Set(titles.map(t => `${slugify(t)}-${tmdbId}`))];
+  for (const slug of slugs) {
+    try {
+      const { html, cookies } = await fetchPageWithCookies(`${BASE}/fiche/${slug}`);
+      const videoUrl = extractVideoUrl(html);
+      if (videoUrl) return { url: videoUrl, cookies };
+    } catch {}
+  }
+  return null;
+}
+
+async function getCineregalSeriesUrlWithCookies(tmdbId, season, episode) {
+  const titles = await getTitles(tmdbId, 'tv');
+  const slugs = [...new Set(titles.map(t => `${slugify(t)}-${tmdbId}`))];
+  const S = String(season).padStart(2, '0');
+  const E = String(episode).padStart(2, '0');
+  for (const slug of slugs) {
+    try {
+      const url = `${BASE}/lecture/serie/${slug}/${slug}-s${S}e${E}`;
+      const { html, cookies } = await fetchPageWithCookies(url);
+      const videoUrl = extractVideoUrl(html);
+      if (videoUrl) return { url: videoUrl, cookies };
+    } catch {}
   }
   return null;
 }
@@ -101,4 +142,4 @@ async function getCineregalSeriesUrl(tmdbId, season, episode) {
   return null;
 }
 
-module.exports = { getCineregalFilmUrl, getCineregalSeriesUrl };
+module.exports = { getCineregalFilmUrl, getCineregalSeriesUrl, getCineregalFilmUrlWithCookies, getCineregalSeriesUrlWithCookies };
