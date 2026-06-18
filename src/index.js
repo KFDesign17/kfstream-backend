@@ -11,7 +11,7 @@ const filmsRoutes = require('./routes/films');
 const seriesRoutes = require('./routes/series');
 const notifyRoutes = require('./routes/notify');
 const trailerRoutes = require('./routes/trailer');
-const { getCineregalFilmUrl, getCineregalSeriesUrl, getCineregalFilmUrlWithCookies, getCineregalSeriesUrlWithCookies } = require('./scrapers/cineregal');
+const { getCineregalFilmUrl, getCineregalSeriesUrl } = require('./scrapers/cineregal');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -66,37 +66,6 @@ app.get('/api/proxy/video', (req, res) => {
   if (req.headers.range) reqHeaders['Range'] = req.headers.range;
   req.on('close', () => res.destroy());
   streamVideoProxy(url, reqHeaders, res, 5);
-});
-
-// Proxy téléchargement — re-scrape URL + cookies CineRegal frais juste avant de streamer
-app.get('/api/proxy/download', async (req, res) => {
-  const { type, tmdbId, season, episode } = req.query;
-  if (!type || !tmdbId) return res.status(400).json({ error: 'type et tmdbId requis' });
-
-  let result;
-  try {
-    if (type === 'film') {
-      result = await getCineregalFilmUrlWithCookies(Number(tmdbId));
-    } else {
-      result = await getCineregalSeriesUrlWithCookies(Number(tmdbId), Number(season) || 1, Number(episode) || 1);
-    }
-  } catch {
-    return res.status(500).json({ error: 'Impossible de récupérer le lien vidéo' });
-  }
-
-  if (!result?.url) return res.status(404).json({ error: 'Vidéo non trouvée' });
-
-  const reqHeaders = {
-    'Referer': 'https://cineregal.art/',
-    'Origin': 'https://cineregal.art',
-    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-    'Accept': '*/*',
-    'Accept-Encoding': 'identity',
-  };
-  if (result.cookies) reqHeaders['Cookie'] = result.cookies;
-  if (req.headers.range) reqHeaders['Range'] = req.headers.range;
-  req.on('close', () => { try { res.destroy(); } catch {} });
-  streamVideoProxy(result.url, reqHeaders, res, 5);
 });
 
 // Proxy générique — transmet les requêtes avec le bon Referer
