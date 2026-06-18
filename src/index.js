@@ -11,6 +11,7 @@ const filmsRoutes = require('./routes/films');
 const seriesRoutes = require('./routes/series');
 const notifyRoutes = require('./routes/notify');
 const trailerRoutes = require('./routes/trailer');
+const { getCineregalFilmUrl, getCineregalSeriesUrl } = require('./scrapers/cineregal');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -65,6 +66,37 @@ app.get('/api/proxy/video', (req, res) => {
   if (req.headers.range) reqHeaders['Range'] = req.headers.range;
   req.on('close', () => res.destroy());
   streamVideoProxy(url, reqHeaders, res, 5);
+});
+
+// Proxy téléchargement — re-scrape l'URL CineRegal fraîche juste avant de streamer
+app.get('/api/proxy/download', async (req, res) => {
+  const { type, tmdbId, season, episode } = req.query;
+  if (!type || !tmdbId) return res.status(400).json({ error: 'type et tmdbId requis' });
+
+  let videoUrl;
+  try {
+    if (type === 'film') {
+      const result = await getCineregalFilmUrl(Number(tmdbId));
+      videoUrl = result?.url;
+    } else {
+      const result = await getCineregalSeriesUrl(Number(tmdbId), Number(season) || 1, Number(episode) || 1);
+      videoUrl = result?.url;
+    }
+  } catch {
+    return res.status(500).json({ error: 'Impossible de récupérer le lien vidéo' });
+  }
+
+  if (!videoUrl) return res.status(404).json({ error: 'Vidéo non trouvée' });
+
+  const reqHeaders = {
+    'Referer': 'https://cineregal.art/',
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+    'Accept': '*/*',
+    'Accept-Encoding': 'identity',
+  };
+  if (req.headers.range) reqHeaders['Range'] = req.headers.range;
+  req.on('close', () => { try { res.destroy(); } catch {} });
+  streamVideoProxy(videoUrl, reqHeaders, res, 5);
 });
 
 // Proxy générique — transmet les requêtes avec le bon Referer
