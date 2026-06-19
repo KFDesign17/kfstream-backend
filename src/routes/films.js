@@ -28,6 +28,21 @@ router.get('/search', async (req, res) => {
   }
 });
 
+// GET /api/films/detail?tmdbId=12225
+router.get('/detail', async (req, res) => {
+  const { tmdbId } = req.query;
+  if (!tmdbId) return res.status(400).json({ error: 'tmdbId requis' });
+  try {
+    const { data } = await require('axios').get(
+      `https://api.themoviedb.org/3/movie/${tmdbId}?language=fr-FR`,
+      { headers: { Authorization: `Bearer ${process.env.TMDB_TOKEN}`, Accept: 'application/json' }, timeout: 8000 }
+    );
+    res.json({ duration: data.runtime || null });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /api/films/stream?id=6529&tmdbId=12225
 router.get('/stream', async (req, res) => {
   const { id, tmdbId } = req.query;
