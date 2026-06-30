@@ -11,6 +11,7 @@ const filmsRoutes = require('./routes/films');
 const seriesRoutes = require('./routes/series');
 const notifyRoutes = require('./routes/notify');
 const trailerRoutes = require('./routes/trailer');
+const tvAuthRoutes = require('./routes/tvAuth');
 const { getCineregalFilmUrl, getCineregalSeriesUrl } = require('./scrapers/cineregal');
 
 const app = express();
@@ -24,6 +25,7 @@ app.use('/api/films', filmsRoutes);
 app.use('/api/series', seriesRoutes);
 app.use('/api/notify', notifyRoutes);
 app.use('/api/trailer', trailerRoutes);
+app.use('/api/tv-auth', tvAuthRoutes);
 
 // Proxy vidéo streaming — transmet avec Referer cineregal.art, suit les redirects, supporte Range
 function streamVideoProxy(url, headers, res, redirectsLeft) {
