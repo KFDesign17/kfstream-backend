@@ -66,7 +66,11 @@ function fmtShow(item) {
     year: item.first_air_date ? new Date(item.first_air_date).getFullYear() : null,
     rating: item.vote_average ? parseFloat(item.vote_average) : null,
     duration: null, type: 'serie', seasons: null, episodes: null, quality: null,
-    genres: (item.genre_ids || []).map(id => GENRES[id]).filter(Boolean),
+    genres: [...new Set((item.genre_ids || []).flatMap(id => {
+      if (id === 10759) return ['Action', 'Aventure'];   // "Action & Adventure"
+      if (id === 10765) return ['Science-Fiction', 'Fantastique']; // "Sci-Fi & Fantasy"
+      return GENRES[id] ? [GENRES[id]] : [];
+    }))],
   };
 }
 
@@ -151,40 +155,29 @@ async function getSeries(page = 1) {
 
 // ─── Recherche via cineregal ─────────────────────────────────
 async function search(query, type = 'all') {
-  const { data: html } = await axios.get(
-    `${CR}/recherche?q=${encodeURIComponent(query)}`,
-    { headers: { 'User-Agent': UA, 'Accept-Language': 'fr-FR' }, timeout: 10000 }
-  );
+  const results = [];
 
-  // Extrait tmdbIds des liens (dernier segment numérique)
-  const filmIds = [...new Set(
-    [...(html.matchAll(/href="\/fiche\/[^"]*-(\d+)"/g) || [])]
-      .map(m => parseInt(m[1])).filter(Boolean)
-  )];
-  const serieIds = [...new Set(
-    [...(html.matchAll(/href="\/serie\/[^"]*-(\d+)"/g) || [])]
-      .map(m => parseInt(m[1])).filter(Boolean)
-  )];
-
-  const toFetch = [];
-  if (type !== 'serie') filmIds.slice(0, 15).forEach(id => toFetch.push({ id, t: 'film' }));
-  if (type !== 'film') serieIds.slice(0, 15).forEach(id => toFetch.push({ id, t: 'serie' }));
-
-  const results = await Promise.allSettled(
-    toFetch.map(async ({ id, t }) => {
-      const ep = t === 'film' ? 'movie' : 'tv';
-      const { data: d } = await axios.get(`${TMDB_BASE}/${ep}/${id}`, {
-        params: { language: 'fr-FR' },
+  if (type !== 'serie') {
+    try {
+      const { data } = await axios.get(`${TMDB_BASE}/search/movie`, {
+        params: { query, language: 'fr-FR', page: 1 },
         headers: tmdbH(), timeout: 8000,
       });
-      const gids = (d.genres || []).map(g => g.id);
-      return t === 'film'
-        ? fmtFilm({ ...d, genre_ids: gids })
-        : fmtShow({ ...d, genre_ids: gids });
-    })
-  );
+      results.push(...(data.results || []).slice(0, 15).map(fmtFilm));
+    } catch {}
+  }
 
-  return results.filter(r => r.status === 'fulfilled').map(r => r.value);
+  if (type !== 'film') {
+    try {
+      const { data } = await axios.get(`${TMDB_BASE}/search/tv`, {
+        params: { query, language: 'fr-FR', page: 1 },
+        headers: tmdbH(), timeout: 8000,
+      });
+      results.push(...(data.results || []).slice(0, 15).map(fmtShow));
+    } catch {}
+  }
+
+  return results;
 }
 
 module.exports = { getFilms, getSeries, search };
